@@ -1,5 +1,5 @@
 {
-  "name": "gwarant",
+  "name": "gwarant-cli",
   "version": "1.0.0",
   "description": "Log in to your account and manage all your encrypted files",
   "bin": {
@@ -19,6 +19,8 @@
     "eslint-plugin-standard": "^3.0.1"
   },
   "dependencies": {
+    "colors": "^1.1.2",
+    "figlet": "^1.2.0",
     "prompt": "^1.0.0"
   }
 }
