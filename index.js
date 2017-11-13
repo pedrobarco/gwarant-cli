@@ -9,33 +9,41 @@ const colors = require('colors/safe')
 const figlet = require('figlet')
 const pjson = require('./package.json')
 
-const DATABASE = './db.json'
-if (!fs.existsSync(DATABASE)) {
-  fs.writeFileSync(DATABASE, JSON.stringify({}, null, 4))
+const db = './db.json'
+if (!fs.existsSync(db)) {
+  fs.writeFileSync(db, JSON.stringify({}, null, 4))
 }
-const db = require(DATABASE)
-let password
+const dbjson = require(db)
+
+let username, password
 
 const mainPrompt = {
   name: 'option',
   message: '[R]egister [L]ogin [Q]uit',
   validator: /r|l|q/i,
-  require: true,
+  warning: 'Not a valid option',
+  empty: false,
   before: function (option) { return option.toLowerCase() }
 }
 
 const registerPrompt = {
   properties: {
-    username:
-    {
+    username: {
       type: 'string',
-      required: true
+      empty: false
     },
     password: {
       type: 'string',
+      validator: /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/,
+      warning: 'Minimum eight characters, at least one letter and one number.',
       hidden: true,
-      required: true,
-      replace: '*'
+      empty: false
+    },
+    confirm: {
+      type: 'string',
+      message: 'retype password',
+      hidden: true,
+      empty: false
     }
   }
 }
@@ -43,14 +51,14 @@ const registerPrompt = {
 const loginPrompt = {
   properties: {
     username:
-    {
-      type: 'string',
-      required: true
-    },
+      {
+        type: 'string',
+        empty: false
+      },
     password: {
       type: 'string',
       hidden: true,
-      required: true,
+      empty: false,
       replace: '*'
     }
   }
@@ -60,13 +68,14 @@ const cryptoPrompt = {
   name: 'option',
   message: '[A]dd [R]emove [L]ogout',
   validator: /a|r|l/i,
-  require: true,
+  warning: 'Not a valid option',
+  empty: false,
   before: function (option) { return option.toLowerCase() }
 }
 
 const filePrompt = {
   name: 'file',
-  require: true
+  empty: false
 }
 
 prompt.colors = false
@@ -95,14 +104,17 @@ function registerMenu () {
   prompt.get(registerPrompt, function (err, result) {
     if (err) {
       console.log(err)
-    } else if (!db.hasOwnProperty(result.username)) {
-      let salt = crypto.randomBytes(256).toString('hex')
-      let hash = calculateHash(result.username, result.password, salt)
-      db[result.username] = { password: hash, salt: salt, files: [] }
-      fs.writeFileSync(DATABASE, JSON.stringify(db, null, 4))
-      return mainMenu()
     } else {
-      console.log(`That username has already been taken.`)
+      if (dbjson.hasOwnProperty(result.username)) {
+        console.log(`That username has already been taken.`)
+      } else if (result.password !== result.confirm) {
+        console.log(`Passwords do not match.`)
+      } else {
+        const salt = crypto.randomBytes(256).toString('hex')
+        const hash = calculateHash(result.username, result.password, salt)
+        dbjson[result.username] = { password: hash, salt: salt, files: [] }
+        fs.writeFileSync(db, JSON.stringify(dbjson, null, 4))
+      }
       return mainMenu()
     }
   })
@@ -113,91 +125,104 @@ function loginMenu () {
     if (err) {
       console.log(err)
     } else {
-      let hash = calculateHash(result.username, result.password, db[result.username]['salt'])
-      if (db[result.username].password === hash) {
-        password = result.password
-        console.log(`Logged in as ${result.username}`)
-        cipherAll(result.username, false)
-        return cryptoMenu(result.username)
-      } else {
-        console.log(`Incorrect user or password.`)
-        return mainMenu()
+      if (dbjson.hasOwnProperty(result.username)) {
+        const hash = calculateHash(result.username, result.password, dbjson[result.username].salt)
+        if (dbjson[result.username].password === hash) {
+          username = result.username
+          password = result.password
+          console.log(`Logged in as ${username}`)
+          cipherAll(false)
+          return cryptoMenu()
+        }
       }
-    }
-  })
-}
-
-function cryptoMenu (username) {
-  prompt.get(cryptoPrompt, function (err, result) {
-    if (err) {
-      console.log(err)
-    } else if (result.option === 'a') {
-      return addFileMenu(username)
-    } else if (result.option === 'r') {
-      return removeFileMenu(username)
-    } else if (result.option === 'l') {
-      cipherAll(username, true)
+      console.log(`Incorrect user or password.`)
       return mainMenu()
     }
   })
 }
 
-function addFileMenu (username) {
-  prompt.get(filePrompt, function (err, result) {
+function cryptoMenu () {
+  prompt.get(cryptoPrompt, function (err, result) {
     if (err) {
       console.log(err)
-    } else {
-      let file = path.resolve(result.file)
-      if (db[username].files.includes(file)) {
-        console.log(`File already exists in list.`)
-      } else {
-        db[username].files.push(file)
-        fs.writeFileSync(DATABASE, JSON.stringify(db, null, 4))
-      }
-      return cryptoMenu(username)
+    } else if (result.option === 'a') {
+      return addFileMenu()
+    } else if (result.option === 'r') {
+      return removeFileMenu()
+    } else if (result.option === 'l') {
+      cipherAll(true)
+      return mainMenu()
     }
   })
 }
 
-function removeFileMenu (username) {
+function addFileMenu () {
   prompt.get(filePrompt, function (err, result) {
     if (err) {
       console.log(err)
     } else {
-      let file = path.resolve(result.file)
-      if (!db[username].files.includes(file)) {
-        console.log(`File does not exist in list.`)
+      const file = path.resolve(result.file)
+      if (fs.existsSync(file)) {
+        if (dbjson[username].files.includes(file)) {
+          console.log(`File already in list.`)
+        } else {
+          dbjson[username].files.push(file)
+          fs.writeFileSync(db, JSON.stringify(dbjson, null, 4))
+        }
       } else {
-        let index = db[username].files.indexOf(file)
-        db[username].files.splice(index, 1)
-        fs.writeFileSync(DATABASE, JSON.stringify(db, null, 4))
+        console.log(`File does not exist.`)
       }
-      return cryptoMenu(username)
+      return cryptoMenu()
     }
   })
 }
 
-function cipherAll (username, toCipher) {
-  let key
+function removeFileMenu () {
+  prompt.get(filePrompt, function (err, result) {
+    if (err) {
+      console.log(err)
+    } else {
+      const file = path.resolve(result.file)
+      if (fs.existsSync(file)) {
+        if (!dbjson[username].files.includes(file)) {
+          console.log(`File not in list.`)
+        } else {
+          const index = dbjson[username].files.indexOf(file)
+          dbjson[username].files.splice(index, 1)
+          fs.writeFileSync(db, JSON.stringify(dbjson, null, 4))
+        }
+      } else {
+        console.log(`File does not exist.`)
+      }
+      return cryptoMenu()
+    }
+  })
+}
+
+function cipherAll (toCipher) {
   let input, output
-  if (toCipher) {
-    key = crypto.createCipher('aes192', password)
-  } else {
-    key = crypto.createDecipher('aes192', password)
-  }
   let i, file, newFile
-  for (i in db[username].files) {
-    file = db[username].files[i]
+  let cipher
+  const hash = require('crypto')
+  const key = calculateHash(username, password + 'file', dbjson[username].salt).slice(0, 24)
+  const iv = hash.createHash('md5').update(password).digest().slice(0, 16)
+  if (toCipher) {
+    cipher = crypto.createCipheriv('aes192', key, iv)
+  } else {
+    cipher = crypto.createDecipheriv('aes192', key, iv)
+  }
+  for (i in dbjson[username].files) {
+    file = dbjson[username].files[i]
     if (fs.existsSync(file)) {
       newFile = file + '.tmp'
       input = fs.createReadStream(file)
       output = fs.createWriteStream(newFile)
-      input.pipe(key).pipe(output)
+      input.pipe(cipher).pipe(output)
       output.on('finish', () => {
         input = fs.createReadStream(newFile)
         output = fs.createWriteStream(file)
         input.pipe(output)
-        fs.unlink(newFile)
+        fs.unlinkSync(newFile)
       })
     } else {
       console.log(`File ${file} does not exist.`)
@@ -206,7 +231,7 @@ function cipherAll (username, toCipher) {
 }
 
 function calculateHash (username, password, salt) {
-  let hash = crypto.pbkdf2Sync(password, salt, 100000, 512, 'sha512').toString('hex')
+  const hash = crypto.pbkdf2Sync(password, salt, 100000, 512, 'sha512').toString('hex')
   return hash
 }
 
