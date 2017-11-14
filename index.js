@@ -89,7 +89,8 @@ mainMenu()
 function mainMenu () {
   prompt.get(mainPrompt, function (err, result) {
     if (err) {
-      console.log(err)
+      console.log('Something went wrong. Exiting...')
+      process.exit()
     } else if (result.option === 'r') {
       return registerMenu()
     } else if (result.option === 'l') {
@@ -103,7 +104,8 @@ function mainMenu () {
 function registerMenu () {
   prompt.get(registerPrompt, function (err, result) {
     if (err) {
-      console.log(err)
+      console.log('Something went wrong. Exiting...')
+      process.exit()
     } else {
       if (dbjson.hasOwnProperty(result.username)) {
         console.log(`That username has already been taken.`)
@@ -123,7 +125,8 @@ function registerMenu () {
 function loginMenu () {
   prompt.get(loginPrompt, function (err, result) {
     if (err) {
-      console.log(err)
+      console.log('Something went wrong. Exiting...')
+      process.exit()
     } else {
       if (dbjson.hasOwnProperty(result.username)) {
         const hash = calculateHash(result.username, result.password, dbjson[result.username].salt)
@@ -144,7 +147,8 @@ function loginMenu () {
 function cryptoMenu () {
   prompt.get(cryptoPrompt, function (err, result) {
     if (err) {
-      console.log(err)
+      console.log('Something went wrong. Exiting...')
+      process.exit()
     } else if (result.option === 'a') {
       return addFileMenu()
     } else if (result.option === 'r') {
@@ -159,10 +163,11 @@ function cryptoMenu () {
 function addFileMenu () {
   prompt.get(filePrompt, function (err, result) {
     if (err) {
-      console.log(err)
+      console.log('Something went wrong. Exiting...')
+      process.exit()
     } else {
       const file = path.resolve(result.file)
-      if (fs.existsSync(file)) {
+      if (fs.existsSync(file) && fs.lstatSync(file).isFile()) {
         if (dbjson[username].files.includes(file)) {
           console.log(`File already in list.`)
         } else {
@@ -180,19 +185,14 @@ function addFileMenu () {
 function removeFileMenu () {
   prompt.get(filePrompt, function (err, result) {
     if (err) {
-      console.log(err)
+      console.log('Something went wrong. Exiting...')
+      process.exit()
     } else {
       const file = path.resolve(result.file)
-      if (fs.existsSync(file)) {
-        if (!dbjson[username].files.includes(file)) {
-          console.log(`File not in list.`)
-        } else {
-          const index = dbjson[username].files.indexOf(file)
-          dbjson[username].files.splice(index, 1)
-          fs.writeFileSync(db, JSON.stringify(dbjson, null, 4))
-        }
+      if (!dbjson[username].files.includes(file)) {
+        console.log(`File not in list.`)
       } else {
-        console.log(`File does not exist.`)
+        removeFile(file)
       }
       return cryptoMenu()
     }
@@ -225,7 +225,7 @@ function cipherAll (toCipher) {
         fs.unlinkSync(newFile)
       })
     } else {
-      console.log(`File ${file} does not exist.`)
+      removeFile(file)
     }
   }
 }
@@ -233,6 +233,12 @@ function cipherAll (toCipher) {
 function calculateHash (username, password, salt) {
   const hash = crypto.pbkdf2Sync(password, salt, 100000, 512, 'sha512').toString('hex')
   return hash
+}
+
+function removeFile (file) {
+  const index = dbjson[username].files.indexOf(file)
+  dbjson[username].files.splice(index, 1)
+  fs.writeFileSync(db, JSON.stringify(dbjson, null, 4))
 }
 
 function headerFiglet () {
