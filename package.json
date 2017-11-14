@@ -1,6 +1,6 @@
 {
   "name": "gwarant-cli",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Log in to your account and manage all your encrypted files",
   "bin": {
     "qwerent": "index.js"

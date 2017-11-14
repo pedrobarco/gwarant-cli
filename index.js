@@ -20,7 +20,7 @@ let username, password
 const mainPrompt = {
   name: 'option',
   message: '[R]egister [L]ogin [Q]uit',
-  validator: /r|l|q/i,
+  validator: /r$|l$|q$/i,
   warning: 'Not a valid option',
   empty: false,
   before: function (option) { return option.toLowerCase() }
@@ -30,7 +30,9 @@ const registerPrompt = {
   properties: {
     username: {
       type: 'string',
-      empty: false
+      empty: false,
+      conform: function (username) { return !dbjson.hasOwnProperty(username) },
+      warning: 'Username already in use.'
     },
     password: {
       type: 'string',
@@ -67,7 +69,7 @@ const loginPrompt = {
 const cryptoPrompt = {
   name: 'option',
   message: '[A]dd [R]emove [L]ogout',
-  validator: /a|r|l/i,
+  validator: /a$|r$|l$/i,
   warning: 'Not a valid option',
   empty: false,
   before: function (option) { return option.toLowerCase() }
@@ -77,6 +79,9 @@ const filePrompt = {
   name: 'file',
   empty: false
 }
+
+const correct = colors.bgWhite.red(' √ ')
+const wrong = colors.bgWhite.red(' X ')
 
 prompt.colors = false
 prompt.message = colors.bgWhite.red(' ? ')
@@ -89,8 +94,7 @@ mainMenu()
 function mainMenu () {
   prompt.get(mainPrompt, function (err, result) {
     if (err) {
-      console.log('Something went wrong. Exiting...')
-      process.exit()
+      handleSignal()
     } else if (result.option === 'r') {
       return registerMenu()
     } else if (result.option === 'l') {
@@ -104,13 +108,10 @@ function mainMenu () {
 function registerMenu () {
   prompt.get(registerPrompt, function (err, result) {
     if (err) {
-      console.log('Something went wrong. Exiting...')
-      process.exit()
+      handleSignal()
     } else {
-      if (dbjson.hasOwnProperty(result.username)) {
-        console.log(`That username has already been taken.`)
-      } else if (result.password !== result.confirm) {
-        console.log(`Passwords do not match.`)
+      if (result.password !== result.confirm) {
+        console.log(`${wrong} Passwords do not match.`)
       } else {
         const salt = crypto.randomBytes(256).toString('hex')
         const hash = calculateHash(result.username, result.password, salt)
@@ -125,20 +126,19 @@ function registerMenu () {
 function loginMenu () {
   prompt.get(loginPrompt, function (err, result) {
     if (err) {
-      console.log('Something went wrong. Exiting...')
-      process.exit()
+      handleSignal()
     } else {
       if (dbjson.hasOwnProperty(result.username)) {
         const hash = calculateHash(result.username, result.password, dbjson[result.username].salt)
         if (dbjson[result.username].password === hash) {
           username = result.username
           password = result.password
-          console.log(`Logged in as ${username}`)
+          console.log(`${correct} Logged in as ${username}!`)
           cipherAll(false)
           return cryptoMenu()
         }
       }
-      console.log(`Incorrect user or password.`)
+      console.log(`${wrong} Incorrect user or password.`)
       return mainMenu()
     }
   })
@@ -147,8 +147,7 @@ function loginMenu () {
 function cryptoMenu () {
   prompt.get(cryptoPrompt, function (err, result) {
     if (err) {
-      console.log('Something went wrong. Exiting...')
-      process.exit()
+      handleSignal()
     } else if (result.option === 'a') {
       return addFileMenu()
     } else if (result.option === 'r') {
@@ -163,19 +162,18 @@ function cryptoMenu () {
 function addFileMenu () {
   prompt.get(filePrompt, function (err, result) {
     if (err) {
-      console.log('Something went wrong. Exiting...')
-      process.exit()
+      handleSignal()
     } else {
       const file = path.resolve(result.file)
       if (fs.existsSync(file) && fs.lstatSync(file).isFile()) {
         if (dbjson[username].files.includes(file)) {
-          console.log(`File already in list.`)
+          console.log(`${wrong} File already in list.`)
         } else {
           dbjson[username].files.push(file)
           fs.writeFileSync(db, JSON.stringify(dbjson, null, 4))
         }
       } else {
-        console.log(`File does not exist.`)
+        console.log(`${wrong} File does not exist.`)
       }
       return cryptoMenu()
     }
@@ -185,12 +183,11 @@ function addFileMenu () {
 function removeFileMenu () {
   prompt.get(filePrompt, function (err, result) {
     if (err) {
-      console.log('Something went wrong. Exiting...')
-      process.exit()
+      handleSignal()
     } else {
       const file = path.resolve(result.file)
       if (!dbjson[username].files.includes(file)) {
-        console.log(`File not in list.`)
+        console.log(`${wrong} File not in list.`)
       } else {
         removeFile(file)
       }
@@ -203,6 +200,8 @@ function cipherAll (toCipher) {
   let input, output
   let i, file, newFile
   let cipher
+  const mode = toCipher ? 'Ciphering' : 'Deciphering'
+  console.log(`${correct} ${mode} files...`)
   const hash = require('crypto')
   const key = calculateHash(username, password + 'file', dbjson[username].salt).slice(0, 24)
   const iv = hash.createHash('md5').update(password).digest().slice(0, 16)
@@ -241,10 +240,18 @@ function removeFile (file) {
   fs.writeFileSync(db, JSON.stringify(dbjson, null, 4))
 }
 
+function handleSignal () {
+  console.log()
+  console.log(`${wrong} Program interruption detected.`)
+  cipherAll(true, () => {
+    process.exit()
+  })
+}
+
 function headerFiglet () {
-  const figletText = figlet.textSync('gwarant-cli', 'speed')
+  const figletText = figlet.textSync('gwarant-cli', 'Speed')
   console.log(colors.red(figletText))
   console.log()
-  console.log(`${colors.bgWhite.red(' ' + pjson.name + ' ')}${colors.bgRed.white(' ' + pjson.version + ' ')}`)
+  console.log(`${colors.bgWhite.red(` ${pjson.name} `)}${colors.bgRed.white(` ${pjson.version} `)}`)
   console.log()
 }
