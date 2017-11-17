@@ -5,94 +5,24 @@ const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
 const prompt = require('prompt')
-const colors = require('colors/safe')
-const figlet = require('figlet')
-const pjson = require('./package.json')
+const config = require('./config')
+const prompts = require('./prompts/')
+const lib = require('./lib')
+const db = config.db
+const dbjson = config.dbjson
 
-const db = './db.json'
-if (!fs.existsSync(db)) {
-  fs.writeFileSync(db, JSON.stringify({}, null, 4))
-}
-const dbjson = require(db)
+prompt.colors = config.prompt.colors
+prompt.message = config.prompt.message
+prompt.delimiter = config.prompt.delimiter
 
 let username, password
 
-const mainPrompt = {
-  name: 'option',
-  message: '[R]egister [L]ogin [Q]uit',
-  validator: /r$|l$|q$/i,
-  warning: 'Not a valid option',
-  empty: false,
-  before: function (option) { return option.toLowerCase() }
-}
-
-const registerPrompt = {
-  properties: {
-    username: {
-      type: 'string',
-      empty: false,
-      conform: function (username) { return !dbjson.hasOwnProperty(username) },
-      warning: 'Username already in use.'
-    },
-    password: {
-      type: 'string',
-      validator: /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/,
-      warning: 'Minimum eight characters, at least one letter and one number.',
-      hidden: true,
-      empty: false
-    },
-    confirm: {
-      type: 'string',
-      message: 'retype password',
-      hidden: true,
-      empty: false
-    }
-  }
-}
-
-const loginPrompt = {
-  properties: {
-    username:
-      {
-        type: 'string',
-        empty: false
-      },
-    password: {
-      type: 'string',
-      hidden: true,
-      empty: false,
-      replace: '*'
-    }
-  }
-}
-
-const cryptoPrompt = {
-  name: 'option',
-  message: '[A]dd [R]emove [L]ogout',
-  validator: /a$|r$|l$/i,
-  warning: 'Not a valid option',
-  empty: false,
-  before: function (option) { return option.toLowerCase() }
-}
-
-const filePrompt = {
-  name: 'file',
-  empty: false
-}
-
-const correct = colors.bgWhite.red(' √ ')
-const wrong = colors.bgWhite.red(' X ')
-
-prompt.colors = false
-prompt.message = colors.bgWhite.red(' ? ')
-prompt.delimiter = ' ' + colors.bgRed.white('::') + ' '
-
 prompt.start()
-headerFiglet()
+lib.headerFiglet()
 mainMenu()
 
 function mainMenu () {
-  prompt.get(mainPrompt, function (err, result) {
+  prompt.get(prompts.mainPrompt, function (err, result) {
     if (err) {
       handleSignal()
     } else if (result.option === 'r') {
@@ -106,17 +36,14 @@ function mainMenu () {
 }
 
 function registerMenu () {
-  prompt.get(registerPrompt, function (err, result) {
+  prompt.get(prompts.registerPrompt, function (err, result) {
     if (err) {
       handleSignal()
     } else {
       if (result.password !== result.confirm) {
-        console.log(`${wrong} Passwords do not match.`)
+        console.log(`${config.prompt.wrong} Passwords do not match.`)
       } else {
-        const salt = crypto.randomBytes(256).toString('hex')
-        const hash = calculateHash(result.username, result.password, salt)
-        dbjson[result.username] = { password: hash, salt: salt, files: [] }
-        fs.writeFileSync(db, JSON.stringify(dbjson, null, 4))
+        registerUser(result.username, result.password)
       }
       return mainMenu()
     }
@@ -124,28 +51,26 @@ function registerMenu () {
 }
 
 function loginMenu () {
-  prompt.get(loginPrompt, function (err, result) {
+  prompt.get(prompts.loginPrompt, function (err, result) {
     if (err) {
       handleSignal()
     } else {
       if (dbjson.hasOwnProperty(result.username)) {
         const hash = calculateHash(result.username, result.password, dbjson[result.username].salt)
         if (dbjson[result.username].password === hash) {
-          username = result.username
-          password = result.password
-          console.log(`${correct} Logged in as ${username}!`)
-          cipherAll(false)
+          loginUser(result.username, result.password)
+          console.log(`${config.prompt.correct} Logged in as ${result.username}!`)
           return cryptoMenu()
         }
       }
-      console.log(`${wrong} Incorrect user or password.`)
+      console.log(`${config.prompt.wrong} Incorrect user or password.`)
       return mainMenu()
     }
   })
 }
 
 function cryptoMenu () {
-  prompt.get(cryptoPrompt, function (err, result) {
+  prompt.get(prompts.cryptoPrompt, function (err, result) {
     if (err) {
       handleSignal()
     } else if (result.option === 'a') {
@@ -153,27 +78,27 @@ function cryptoMenu () {
     } else if (result.option === 'r') {
       return removeFileMenu()
     } else if (result.option === 'l') {
-      cipherAll(true)
+      logoutUser()
+      console.log(`${config.prompt.correct} Logged out. Stay safe!`)
       return mainMenu()
     }
   })
 }
 
 function addFileMenu () {
-  prompt.get(filePrompt, function (err, result) {
+  prompt.get(prompts.filePrompt, function (err, result) {
     if (err) {
       handleSignal()
     } else {
       const file = path.resolve(result.file)
       if (fs.existsSync(file) && fs.lstatSync(file).isFile()) {
         if (dbjson[username].files.includes(file)) {
-          console.log(`${wrong} File already in list.`)
+          console.log(`${config.prompt.wrong} File already in list.`)
         } else {
-          dbjson[username].files.push(file)
-          fs.writeFileSync(db, JSON.stringify(dbjson, null, 4))
+          addFile(file)
         }
       } else {
-        console.log(`${wrong} File does not exist.`)
+        console.log(`${config.prompt.wrong} File does not exist.`)
       }
       return cryptoMenu()
     }
@@ -181,13 +106,13 @@ function addFileMenu () {
 }
 
 function removeFileMenu () {
-  prompt.get(filePrompt, function (err, result) {
+  prompt.get(prompts.filePrompt, function (err, result) {
     if (err) {
       handleSignal()
     } else {
       const file = path.resolve(result.file)
       if (!dbjson[username].files.includes(file)) {
-        console.log(`${wrong} File not in list.`)
+        console.log(`${config.prompt.wrong} File not in list.`)
       } else {
         removeFile(file)
       }
@@ -196,12 +121,47 @@ function removeFileMenu () {
   })
 }
 
+function registerUser (username, password) {
+  const salt = crypto.randomBytes(256).toString('hex')
+  const hash = calculateHash(username, password, salt)
+  dbjson[username] = { password: hash, salt: salt, files: [] }
+  fs.writeFileSync(db, JSON.stringify(dbjson, null, 4))
+}
+
+function loginUser (user, pass) {
+  username = user
+  password = pass
+  cipherAll(false)
+}
+
+function logoutUser () {
+  cipherAll(true, () => {
+    username = null
+    password = null
+  })
+}
+
+function addFile (file) {
+  dbjson[username].files.push(file)
+  fs.writeFileSync(db, JSON.stringify(dbjson, null, 4))
+}
+function removeFile (file) {
+  const index = dbjson[username].files.indexOf(file)
+  dbjson[username].files.splice(index, 1)
+  fs.writeFileSync(db, JSON.stringify(dbjson, null, 4))
+}
+
+function calculateHash (username, password, salt) {
+  const hash = crypto.pbkdf2Sync(password, salt, 100000, 512, 'sha512').toString('hex')
+  return hash
+}
+
 function cipherAll (toCipher) {
   let input, output
   let i, file, newFile
   let cipher
   const mode = toCipher ? 'Ciphering' : 'Deciphering'
-  console.log(`${correct} ${mode} files...`)
+  console.log(`${config.prompt.correct} ${mode} files...`)
   const hash = require('crypto')
   const key = calculateHash(username, password + 'file', dbjson[username].salt).slice(0, 24)
   const iv = hash.createHash('md5').update(password).digest().slice(0, 16)
@@ -229,29 +189,14 @@ function cipherAll (toCipher) {
   }
 }
 
-function calculateHash (username, password, salt) {
-  const hash = crypto.pbkdf2Sync(password, salt, 100000, 512, 'sha512').toString('hex')
-  return hash
-}
-
-function removeFile (file) {
-  const index = dbjson[username].files.indexOf(file)
-  dbjson[username].files.splice(index, 1)
-  fs.writeFileSync(db, JSON.stringify(dbjson, null, 4))
-}
-
 function handleSignal () {
   console.log()
-  console.log(`${wrong} Program interruption detected.`)
-  cipherAll(true, () => {
+  console.log(`${config.prompt.wrong} Program interruption detected.`)
+  if (username && password) {
+    cipherAll(true, () => {
+      process.exit()
+    })
+  } else {
     process.exit()
-  })
-}
-
-function headerFiglet () {
-  const figletText = figlet.textSync('gwarant-cli', 'Speed')
-  console.log(colors.red(figletText))
-  console.log()
-  console.log(`${colors.bgWhite.red(` ${pjson.name} `)}${colors.bgRed.white(` ${pjson.version} `)}`)
-  console.log()
+  }
 }
