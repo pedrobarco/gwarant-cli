@@ -1,11 +1,19 @@
 'use scrict'
 
-const path = require('path')
 const colors = require('colors/safe')
-const lib = require('../lib')
+const fs = require('fs')
+const path = require('path')
 
 const db = path.resolve('./db.json')
-const dbjson = lib.checkDatabase(db)
+const dbjson = checkDatabase(db)
+
+function checkDatabase (file) {
+  if (!fs.existsSync(file)) {
+    fs.writeFileSync(file, JSON.stringify({}, null, 4))
+  }
+  const database = require(file)
+  return database
+}
 
 const prompt = {
   colors: false,
