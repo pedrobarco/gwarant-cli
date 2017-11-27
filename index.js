@@ -54,7 +54,7 @@ function loginMenu () {
       lib.handleSignal(username, password)
     } else {
       if (dbjson.hasOwnProperty(result.username)) {
-        const hash = lib.calculateHash(result.username, result.password, dbjson[result.username].salt)
+        const hash = lib.calculateHash(result.password, dbjson[result.username].salt, config.len.pass).toString('hex')
         if (dbjson[result.username].password === hash) {
           username = result.username
           password = result.password
