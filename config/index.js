@@ -2,8 +2,11 @@
 
 const colors = require('colors/safe')
 const fs = require('fs')
+const rsa = require('node-rsa')
 const path = require('path')
 
+const pubk = checkKeys('public', path.resolve('./public.key'))
+const privk = checkKeys('private', path.resolve('./private.key'))
 const db = path.resolve('./db.json')
 const dbjson = checkDatabase(db)
 
@@ -22,6 +25,17 @@ const len = {
   iv: 16
 }
 
+function checkKeys (type, file) {
+  let key
+  if (!fs.existsSync(file)) {
+    key = rsa().generateKeyPair(512).exportKey('pkcs1-' + type + '-der')
+    fs.writeFileSync(file, key)
+  } else {
+    key = fs.readFileSync(file)
+  }
+  return key
+}
+
 function checkDatabase (file) {
   if (!fs.existsSync(file)) {
     fs.writeFileSync(file, JSON.stringify({}, null, 4))
@@ -33,6 +47,8 @@ function checkDatabase (file) {
 module.exports = {
   db,
   dbjson,
+  privk,
   prompt,
+  pubk,
   len
 }
