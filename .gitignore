@@ -59,3 +59,6 @@ typings/
 
 # JSON database
 db.json
+
+# Crypto files
+*.key
