@@ -2,13 +2,8 @@
 
 const colors = require('colors/safe')
 const fs = require('fs')
-const rsa = require('node-rsa')
+const NodeRSA = require('node-rsa')
 const path = require('path')
-
-const pubk = checkKeys('public', path.resolve('./public.key'))
-const privk = checkKeys('private', path.resolve('./private.key'))
-const db = path.resolve('./db.json')
-const dbjson = checkDatabase(db)
 
 const prompt = {
   colors: false,
@@ -25,17 +20,42 @@ const len = {
   iv: 16
 }
 
-function checkKeys (type, file) {
-  let key
-  if (!fs.existsSync(file)) {
-    key = rsa().generateKeyPair(512).exportKey('pkcs1-' + type + '-der')
-    fs.writeFileSync(file, key)
+const server = {
+  port: '1918',
+  timeout: 10 * 1000
+}
+
+const enc = {
+  string: 'hex',
+  pubkey: 'pkcs8-public-der',
+  privkey: 'pkcs1-der'
+}
+
+const file = {
+  db: path.resolve('./db.json'),
+  pubKeyFile: path.resolve('./pub.der'),
+  privKeyFile: path.resolve('./priv.der')
+}
+
+const key = checkKeys(file.pubKeyFile, file.privKeyFile)
+function checkKeys (pubKeyFile, privKeyFile) {
+  const key = new NodeRSA({ b: 512 })
+  if (fs.existsSync(pubKeyFile) && fs.existsSync(privKeyFile)) {
+    const pubk = fs.readFileSync(pubKeyFile)
+    const privk = fs.readFileSync(privKeyFile)
+    key.importKey(pubk, enc.pubkey)
+    key.importKey(privk, enc.privkey)
   } else {
-    key = fs.readFileSync(file)
+    key.generateKeyPair()
+    const publicDer = key.exportKey(enc.pubkey)
+    const privateDer = key.exportKey(enc.privkey)
+    fs.writeFileSync(pubKeyFile, publicDer)
+    fs.writeFileSync(privKeyFile, privateDer)
   }
   return key
 }
 
+const dbjson = checkDatabase(file.db)
 function checkDatabase (file) {
   if (!fs.existsSync(file)) {
     fs.writeFileSync(file, JSON.stringify({}, null, 4))
@@ -45,10 +65,11 @@ function checkDatabase (file) {
 }
 
 module.exports = {
-  db,
+  file,
+  key,
+  server,
   dbjson,
-  privk,
   prompt,
-  pubk,
-  len
+  len,
+  enc
 }

@@ -84,9 +84,9 @@ function cryptoMenu () {
       lib.logoutUser(username, password, () => {
         username = null
         password = null
+        console.log(`${config.prompt.correct} Logged out. Stay safe!`)
+        return mainMenu()
       })
-      console.log(`${config.prompt.correct} Logged out. Stay safe!`)
-      return mainMenu()
     }
   })
 }

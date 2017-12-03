@@ -62,3 +62,5 @@ db.json
 
 # Crypto files
 *.key
+*.der
+*.pem
