@@ -78,8 +78,7 @@ function cryptoMenu () {
     } else if (result.option === 'r') {
       return removeFileMenu()
     } else if (result.option === 'c') {
-      lib.generateQR(username)
-      lib.establishPair(username, password)
+      lib.generateQR(username, password)
       return cryptoMenu()
     } else if (result.option === 'l') {
       lib.logoutUser(username, password, () => {
