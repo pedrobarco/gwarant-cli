@@ -17,7 +17,8 @@ const len = {
   pass: 32,
   salt: 32,
   key: 24,
-  iv: 16
+  iv: 16,
+  nonce: 8
 }
 
 const server = {
@@ -28,7 +29,8 @@ const server = {
 const enc = {
   string: 'hex',
   pubkey: 'pkcs8-public-der',
-  privkey: 'pkcs1-der'
+  privkey: 'pkcs1-der',
+  qr: 'public'
 }
 
 const file = {
