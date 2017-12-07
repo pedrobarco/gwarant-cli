@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 'use strict'
 
+module.exports = {
+  
+}
+
 const fs = require('fs')
 const path = require('path')
 const prompt = require('prompt')
@@ -27,6 +31,8 @@ function mainMenu () {
       return registerMenu()
     } else if (result.option === 'l') {
       return loginMenu()
+    } else if (result.option === 'p') {
+      return lib.connectPair()
     } else if (result.option === 'q') {
       return process.exit()
     }
@@ -70,6 +76,10 @@ function loginMenu () {
 }
 
 function cryptoMenu () {
+  if (username === undefined) {
+	console.log(`${config.prompt.correct} Logging in as ${module.exports.username}`)
+    username = module.exports.username
+  }
   prompt.get(prompts.cryptoPrompt, function (err, result) {
     if (err) {
       lib.handleSignal(username, password)
@@ -126,3 +136,7 @@ function removeFileMenu () {
     }
   })
 }
+
+module.exports.cryptoMenu = cryptoMenu;
+module.exports.username = username;
+module.exports.prompt = prompt;
